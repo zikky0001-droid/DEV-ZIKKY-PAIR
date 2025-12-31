@@ -1,5 +1,6 @@
+
 {
-  "name": "DEV-ZIKKY MD BOT",
+  "name": "dev-zikky-md-bot",
   "version": "1.0.0",
   "description": "DEV-ZIKKY MD Bot - WhatsApp Pair Code Generator",
   "main": "index.js",
@@ -9,7 +10,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "build": "echo 'No build step required'"
+    "dev": "nodemon index.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "author": "DEV ZIKKY",
   "license": "ISC",
@@ -23,5 +25,8 @@
     "pino": "9.5.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }
