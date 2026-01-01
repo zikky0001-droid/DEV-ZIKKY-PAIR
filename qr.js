@@ -130,7 +130,7 @@ router.get('/', async (req, res) => {
                     
                     try {
                         
-                                                // Read the session file
+                         // Read the session file
                         const sessionDEVZIKKY = fs.readFileSync(dirs + '/creds.json');
                         
                         // Get the user's JID from the session
@@ -149,11 +149,97 @@ router.get('/', async (req, res) => {
                             
                             // Send warning message
                             await sock.sendMessage(userJid, {
-                                text: `⚠️Do not share this file with anybody⚠️\n 
-┌┤✑  Thank you for using ♦ DEV•ZIKKY Bot
-│└────────────┈ ⳹        
-│©2026 ♦ DEV•ZIKKY MD ♥
-└─────────────────┈ ⳹\n\n`
+                                text: `🔐 *DEV•ZIKKY MD BOT SESSION FILE* 🔐
+
+╔═══════════════════════════╗
+║  ⚠️  CRITICAL SECURITY NOTICE  ⚠️       
+╚═══════════════════════════╝
+
+🚨 *IMPORTANT WARNING:*
+• This file provides FULL ACCESS to your WhatsApp
+• NEVER share with anyone you don't TRUST COMPLETELY
+• If device is lost/stolen, LOG OUT immediately
+• Keep this file SECURE like your password
+
+🛡️ *Session ID:* ${num}
+📅 *Generated:* ${new Date().toLocaleString()}
+⏳ *Expires:* 24 Hours (Render Sessions)
+
+────────────────────────────`
+});
+
+// Send session info - SECOND MESSAGE
+await KnightBot.sendMessage(userJid, {
+    text: `⚡ *SESSION DEPLOYMENT INFORMATION*
+
+🔗 *Render Session Generator:*
+dev-zikky-md.onrender.com
+
+🔄 *Session Expiry:*
+This creds.json file expires in *24 hours* on Render.
+For permanent sessions, deploy on:
+• Bot-Hosting.net
+• KataBump.com
+• Railway.app
+• Replit.com
+
+🤖 *Supported Platforms:*
+│ ✅ WhatsApp Bot Deployment
+│ ✅ Multi-Device Support
+│ ✅ 24/7 Uptime (on paid hosting)
+│ ✅ Custom Feature Integration
+
+──────────────────────────────`
+});
+
+// Send support info - THIRD MESSAGE
+await KnightBot.sendMessage(userJid, {
+    text: `📞 *DEVELOPER SUPPORT & CONTACT*
+
+👨‍💻 *Developer:* DEV•ZIKKY
+📱 *WhatsApp:* +2348054483474
+📧 *Telegram:* @Zikkystar1
+💨 *GitHub:* zikky0001-droid
+
+🛠️ *Need Help With Deployment?*
+Contact for assistance with:
+│ • Bot-Hosting Setup
+│ • Render Configuration
+│ • KataBump Deployment
+│ • Custom Bot Features
+│ • Session Migration
+
+💡 *Quick Tips:*
+│ 1. Use environment variables for security
+│ 2. Backup session files regularly
+│ 3. Monitor bot logs for issues
+│ 4. Update dependencies monthly
+
+─────────────────────────────`
+});
+
+// Send footer - FOURTH MESSAGE
+await KnightBot.sendMessage(userJid, {
+    text: `┌─────────────────────────────┐
+│          🔰 *DEV•ZIKKY MD* 🔰          
+├───────────────────────────┤
+│  ✑  Professional WhatsApp Bot Suite  
+│  ✑  Multi-Device Support             
+│  ✑  Secure Session Management     
+│  ✑  24/7 Deployment Solutions    
+├───────────────────────────┤
+│  📅 © 2026 DEV•ZIKKY MD             
+│  ⭐ All Rights Reserved              
+└─────────────────────────────┘
+
+⚡ *Quick Deployment:*
+dev-zikky-md.onrender.com
+
+🔗 *Documentation:*
+github.com/zikky0001-droid/DEV_ZIKKY-MD
+
+⚠️ *Remember:* Keep your session file SECURE!
+Creds expire in 24 hours on Render hosting.`
                             }); // <-- Added missing closing parenthesis here
                         } else {
                             console.log("❌ Could not determine user JID to send session file");
