@@ -1,7 +1,7 @@
 {
   "name": "dev-zikky-md-bot",
   "version": "1.0.0",
-  "description": "DEV-ZIKKY MD BOT - WhatsApp Pair Code/Session Generator",
+  "description": "DEV-ZIKKY MD BOT - WhatsApp Pair Code Generator",
   "main": "index.js",
   "type": "module",
   "engines": {
