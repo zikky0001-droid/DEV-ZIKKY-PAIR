@@ -130,9 +130,8 @@ router.get('/', async (req, res) => {
                     
                     try {
                         
-                        
-                        // Read the session file
-                        const sessionKnight = fs.readFileSync(dirs + '/creds.json');
+                                                // Read the session file
+                        const sessionDEVZIKKY = fs.readFileSync(dirs + '/creds.json');
                         
                         // Get the user's JID from the session
                         const userJid = Object.keys(sock.authState.creds.me || {}).length > 0 
@@ -142,18 +141,20 @@ router.get('/', async (req, res) => {
                         if (userJid) {
                             // Send session file to user
                             await sock.sendMessage(userJid, {
-                                document: sessionKnight,
+                                document: sessionDEVZIKKY,
                                 mimetype: 'application/json',
                                 fileName: 'creds.json'
                             });
                             console.log("📄 Session file sent successfully to", userJid);
-                          // Send warning message
+                            
+                            // Send warning message
                             await sock.sendMessage(userJid, {
                                 text: `⚠️Do not share this file with anybody⚠️\n 
 ┌┤✑  Thank you for using ♦ DEV•ZIKKY Bot
 │└────────────┈ ⳹        
 │©2026 ♦ DEV•ZIKKY MD ♥
 └─────────────────┈ ⳹\n\n`
+                            }); // <-- Added missing closing parenthesis here
                         } else {
                             console.log("❌ Could not determine user JID to send session file");
                         }
