@@ -6,21 +6,25 @@ import pn from 'awesome-phonenumber';
 
 const router = express.Router();
 
-// Function to remove files or directories
+// Ensure the session directory exists
 function removeFile(FilePath) {
     try {
         if (!fs.existsSync(FilePath)) return false;
         fs.rmSync(FilePath, { recursive: true, force: true });
-        return true;
     } catch (e) {
         console.error('Error removing file:', e);
-        return false;
     }
 }
 
 router.get('/', async (req, res) => {
     let num = req.query.number;
     
+    if (!num) {
+        return res.status(400).send({ 
+            code: 'Phone number is required. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, 2348054483474 for Nigeria, etc.) without + or spaces.' 
+        });
+    }
+
     // Clean the phone number - remove any non-digit characters
     num = num.replace(/[^0-9]/g, '');
 
@@ -29,7 +33,7 @@ router.get('/', async (req, res) => {
     if (!phone.isValid()) {
         if (!res.headersSent) {
             return res.status(400).send({ 
-                code: 'Invalid phone number. Please enter your full international number without + or spaces.\n\nExamples:\n• US: 15551234567\n• UK: 447911123456\n• Nigeria: 2348054483474'
+                code: 'Invalid phone number. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, 2348054483474 for Nigeria, etc.) without + or spaces.' 
             });
         }
         return;
@@ -37,16 +41,13 @@ router.get('/', async (req, res) => {
     // Use the international number format (E.164, without '+')
     num = phone.getNumber('e164').replace('+', '');
     
-    // Create unique session directory for each request
-    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const dirs = `./pair_sessions/${sessionId}`;
-
-    // Ensure pair_sessions directory exists
-    if (!fs.existsSync('./pair_sessions')) {
-        fs.mkdirSync('./pair_sessions', { recursive: true });
-    }
+    // Create session directory
+    const dirs = `./session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     async function initiateSession() {
+        // Remove existing session if present
+        removeFile(dirs);
+
         const { state, saveCreds } = await useMultiFileAuthState(dirs);
 
         try {
@@ -69,28 +70,18 @@ router.get('/', async (req, res) => {
                 maxRetries: 5,
             });
 
-            let pairCodeSent = false;
-            let sessionSent = false;
-            const maxWaitTime = 60000; // 60 seconds timeout
-
-            // Set timeout to clean up if process takes too long
-            const cleanupTimeout = setTimeout(() => {
-                if (!sessionSent) {
-                    console.log("⏰ Session timeout - cleaning up...");
-                    removeFile(dirs);
-                }
-            }, maxWaitTime);
-
             DEVZIKKY.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect } = update;
+                const { connection, lastDisconnect, isNewLogin, isOnline } = update;
 
                 if (connection === 'open') {
                     console.log("✅ Connected successfully!");
                     console.log("📱 Sending session file to user...");
                     
                     try {
-                        // Read session file
-                        const sessionPath = `${dirs}/creds.json`;
+                        // Wait a moment to ensure session is saved
+                        await delay(1000);
+                        
+                        const sessionPath = dirs + '/creds.json';
                         if (!fs.existsSync(sessionPath)) {
                             throw new Error("Session file not found");
                         }
@@ -98,7 +89,7 @@ router.get('/', async (req, res) => {
                         const sessionData = fs.readFileSync(sessionPath);
                         const userJid = jidNormalizedUser(num + '@s.whatsapp.net');
                         
-                        // Send session file
+                        // Send session file to user
                         await DEVZIKKY.sendMessage(userJid, {
                             document: sessionData,
                             mimetype: 'application/json',
@@ -106,7 +97,7 @@ router.get('/', async (req, res) => {
                         });
                         console.log("📄 Session file sent successfully");
 
-                        // Send warning message
+                        // Send warning message (removed video thumbnail)
                         await DEVZIKKY.sendMessage(userJid, {
                             text: `⚠️ *IMPORTANT SECURITY WARNING* ⚠️
 
@@ -122,77 +113,91 @@ router.get('/', async (req, res) => {
 
 ┌───────────────┐
 │ DEV•ZIKKY MD  │
-│   © 2025      │
+│   © 2026      │
 └───────────────┘`
                         });
                         console.log("⚠️ Warning message sent successfully");
 
-                        sessionSent = true;
-                        
-                        // Clean up session after sending
+                        // Clean up session after use
                         console.log("🧹 Cleaning up session...");
-                        setTimeout(() => {
-                            removeFile(dirs);
-                            console.log("✅ Session cleaned up successfully");
-                        }, 5000);
-
-                        // Close connection gracefully
-                        setTimeout(() => {
-                            if (DEVZIKKY.ws && DEVZIKKY.ws.readyState === 1) {
-                                DEVZIKKY.ws.close();
-                            }
-                        }, 3000);
-
+                        await delay(2000);
+                        removeFile(dirs);
+                        console.log("✅ Session cleaned up successfully");
+                        console.log("🎉 Process completed successfully!");
+                        
                     } catch (error) {
                         console.error("❌ Error sending messages:", error);
+                        // Still clean up session even if sending fails
                         removeFile(dirs);
-                    } finally {
-                        clearTimeout(cleanupTimeout);
                     }
+                }
+
+                if (isNewLogin) {
+                    console.log("🔐 New login via pair code");
+                }
+
+                if (isOnline) {
+                    console.log("📶 Client is online");
                 }
 
                 if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    
+
                     if (statusCode === 401) {
                         console.log("❌ Logged out from WhatsApp. Need to generate new pair code.");
-                        if (!pairCodeSent && !res.headersSent) {
-                            res.status(401).send({ code: 'Session expired. Please try again.' });
-                        }
-                    } else if (!sessionSent) {
-                        console.log("🔁 Connection closed unexpectedly");
+                    } else {
+                        console.log("🔁 Connection closed — restarting...");
+                        // Don't restart automatically - let user request new code
                     }
                 }
             });
 
             if (!DEVZIKKY.authState.creds.registered) {
+                // Wait before requesting pairing code (like original)
                 await delay(3000);
                 
+                // Clean the number again for pairing code request
+                let pairingNum = num.replace(/[^\d+]/g, '');
+                if (pairingNum.startsWith('+')) pairingNum = pairingNum.substring(1);
+
                 try {
-                    let code = await DEVZIKKY.requestPairingCode(num);
+                    let code = await DEVZIKKY.requestPairingCode(pairingNum);
+                    // Format code with dashes (XXXX-XX format)
                     code = code?.match(/.{1,4}/g)?.join('-') || code;
                     
                     if (!res.headersSent) {
-                        pairCodeSent = true;
-                        console.log(`📱 Pair code generated for ${num}: ${code}`);
+                        console.log({ num: pairingNum, code });
                         await res.send({ code });
                     }
                 } catch (error) {
-                    console.error('❌ Error requesting pairing code:', error);
+                    console.error('Error requesting pairing code:', error);
                     if (!res.headersSent) {
-                        res.status(503).send({ code: 'Failed to get pairing code. Please check your phone number and try again.' });
+                        res.status(503).send({ 
+                            code: 'Failed to get pairing code. Please check your phone number and try again.' 
+                        });
                     }
+                    // Clean up on error
                     removeFile(dirs);
+                }
+            } else {
+                console.log("✅ Already registered, no need for pair code");
+                if (!res.headersSent) {
+                    res.status(200).send({ 
+                        code: 'Already registered. Please try with a different number or restart the session.' 
+                    });
                 }
             }
 
             DEVZIKKY.ev.on('creds.update', saveCreds);
 
         } catch (err) {
-            console.error('❌ Error initializing session:', err);
+            console.error('Error initializing session:', err);
             if (!res.headersSent) {
-                res.status(503).send({ code: 'Service Unavailable' });
+                res.status(503).send({ 
+                    code: 'Service Unavailable. Please try again in a few moments.' 
+                });
             }
+            // Clean up on error
             removeFile(dirs);
         }
     }
