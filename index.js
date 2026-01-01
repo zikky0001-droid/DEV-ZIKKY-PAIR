@@ -34,14 +34,18 @@ app.use('/pair', pairRouter);
 app.use('/qr', qrRouter);
 
 app.listen(PORT, () => {
-    console.log(`DEV•ZIKKY MD WhatsApp Bot\n\n            ╔═══════════════════════════════╗
+    console.log(`
+    ╔═══════════════════════════════╗
     ║       DEV•ZIKKY MD WhatsApp Bot 
     ╚═══════════════════════════════╝
     
-    🌐 Server running on: http://${HOST}:${PORT}
-    📱 Available at: https://dev-zikky-pair.onrender.com
+    🌐 Server running on: http://localhost:${PORT}
     
-    📊 Social Media:\n\nGitHub: @zikky0001-droid\n\nTikTok: @zikky.com\n\nServer running on http://localhost:${PORT}`);
+    📊 Social Media:
+    • GitHub: @zikky0001-droid
+    • TikTok: @zikky.com
+    • Telegram: @Zikkystar1
+    `);
 });
 
 export default app;
