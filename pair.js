@@ -2,7 +2,6 @@ import express from 'express';
 import fs from 'fs';
 import pino from 'pino';
 import { makeWASocket, useMultiFileAuthState, delay, makeCacheableSignalKeyStore, Browsers, jidNormalizedUser, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
-import pn from 'awesome-phonenumber';
 
 const router = express.Router();
 
@@ -28,20 +27,26 @@ router.get('/', async (req, res) => {
     // Clean the phone number - remove any non-digit characters
     num = num.replace(/[^0-9]/g, '');
 
-    // Validate the phone number using awesome-phonenumber
-    const phone = pn('+' + num);
-    if (!phone.isValid()) {
+    // Simple phone number validation (replace awesome-phonenumber)
+    if (!num || num.length < 10) {
         return res.status(400).send({ 
-            code: 'Invalid phone number. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, 2348054483474 for Nigeria, etc.) without + or spaces.' 
+            code: 'Invalid phone number. Please enter at least 10 digits (e.g., 15551234567 for US, 447911123456 for UK, 2348054483474 for Nigeria, etc.) without + or spaces.' 
         });
     }
-    
-    // Use the international number format (E.164, without '+')
-    num = phone.getNumber('e164').replace('+', '');
+
+    // Format: remove leading zeros if present
+    if (num.startsWith('0')) {
+        num = num.substring(1);
+    }
     
     // Create session directory
     const sessionId = `pair_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const dirs = `./pair_sessions/${sessionId}`;
+
+    // Ensure directory exists
+    if (!fs.existsSync('./pair_sessions')) {
+        fs.mkdirSync('./pair_sessions', { recursive: true });
+    }
 
     async function initiateSession() {
         // Remove existing session if present
@@ -67,7 +72,7 @@ router.get('/', async (req, res) => {
                 defaultQueryTimeoutMs: 60000,
                 connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 10000,
-                retryRequestDelayMs: 500,
+                retryRequestDelayMs: 1000,
                 maxRetries: 3,
                 emitOwnEvents: true,
                 fireInitQueries: true,
@@ -184,37 +189,50 @@ router.get('/', async (req, res) => {
                     // Wait for socket to be ready
                     await delay(2000);
                     
-                    // For Baileys v7, the method might be different
+                    // For Baileys v7, try different approaches
                     let code;
+                    let attempts = 0;
+                    const maxAttempts = 2;
                     
-                    try {
-                        // Try the standard method
-                        code = await DEVZIKKY.requestPairingCode(num);
-                    } catch (pairError) {
-                        console.log("⚠️ Standard pairing failed, trying alternative...");
-                        
-                        // Alternative approach for v7
-                        if (DEVZIKKY.user) {
-                            // Try to get pairing code from connection
-                            const pairingInfo = await DEVZIKKY.requestPairingCode(num, {
-                                phoneNumber: num,
-                                pushName: 'DEVZIKKY Bot'
-                            });
-                            code = pairingInfo?.code || pairingInfo;
-                        } else {
-                            throw pairError;
+                    while (attempts < maxAttempts && !code) {
+                        attempts++;
+                        try {
+                            if (attempts === 1) {
+                                // Method 1: Standard approach
+                                code = await DEVZIKKY.requestPairingCode(num);
+                            } else {
+                                // Method 2: Alternative approach
+                                code = await DEVZIKKY.requestPairingCode(num, {
+                                    phoneNumber: num,
+                                    pushName: 'DEVZIKKY Bot'
+                                });
+                            }
+                            
+                            // If code is an object, extract it
+                            if (code && typeof code === 'object') {
+                                if (code.code) code = code.code;
+                                else if (code.pairingCode) code = code.pairingCode;
+                                else if (code.pairing_code) code = code.pairing_code;
+                            }
+                            
+                            if (code) break;
+                        } catch (attemptError) {
+                            console.log(`Attempt ${attempts} failed:`, attemptError.message);
+                            if (attempts < maxAttempts) {
+                                await delay(1000);
+                            }
                         }
                     }
                     
-                    // Handle different response formats
-                    if (code && typeof code === 'object') {
-                        if (code.code) code = code.code;
-                        else if (code.pairingCode) code = code.pairingCode;
-                        else if (code.pairing_code) code = code.pairing_code;
+                    if (!code) {
+                        throw new Error('Could not get pairing code');
                     }
                     
-                    // Format code
-                    const formattedCode = code ? code.toString().replace(/(\d{4})(?=\d)/g, '$1-') : code;
+                    // Format code (XXXX-XX format)
+                    const codeStr = code.toString();
+                    const formattedCode = codeStr.length === 6 
+                        ? `${codeStr.substring(0, 4)}-${codeStr.substring(4)}`
+                        : codeStr.replace(/(\d{4})(?=\d)/g, '$1-');
                     
                     if (!res.headersSent) {
                         pairCodeSent = true;
@@ -222,7 +240,7 @@ router.get('/', async (req, res) => {
                         
                         console.log({ 
                             number: num, 
-                            code: formattedCode,
+                            formattedCode: formattedCode,
                             rawCode: code 
                         });
                         
@@ -233,7 +251,7 @@ router.get('/', async (req, res) => {
                     }
                     
                 } catch (error) {
-                    console.error('❌ Error requesting pairing code:', error);
+                    console.error('❌ Error requesting pairing code:', error.message);
                     
                     let errorMessage = 'Failed to get pairing code. ';
                     let statusCode = 503;
@@ -266,7 +284,7 @@ router.get('/', async (req, res) => {
             }
 
         } catch (err) {
-            console.error('❌ Error initializing session:', err);
+            console.error('❌ Error initializing session:', err.message);
             if (!res.headersSent) {
                 res.status(503).send({ 
                     code: 'Service Unavailable. Please try again.' 
@@ -291,7 +309,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.log('❌ Unhandled Rejection at:', promise, 'reason:', reason?.message);
+    console.log('❌ Unhandled Rejection:', reason?.message);
 });
 
 export default router;
